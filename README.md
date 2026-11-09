@@ -41,11 +41,6 @@ A personal solar monitoring web application that connects directly to the offici
 Configure your credentials in `.env.local` (kept out of version control via `.gitignore`):
 
 # Regional Base URL
-# For India: https://india-developer.deyecloud.com
-# For Europe / Global: https://eu1-developer.deyecloud.com
-# For Americas: https://us1-developer.deyecloud.com
-DEYE_BASE_URL=https://india-developer.deyecloud.com
-```
 
 > **Note on Password Encryption**: The application automatically handles the standard SHA-256 lowercase hexadecimal password encryption required by the Deye Cloud OpenAPI. You supply your account password in `.env.local`, and `lib/deye.js` securely hashes it server-side.
 
