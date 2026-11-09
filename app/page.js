@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import Header from '../components/dashboard/Header';
 import StatusCard from '../components/dashboard/StatusCard';
 import PowerFlowDiagram from '../components/dashboard/PowerFlowDiagram';
@@ -231,6 +231,24 @@ function parseTelemetry(liveData) {
   };
 }
 
+// Client-only month label hydration to prevent frozen date during Next.js prerendering
+let cachedMonthLabel = null;
+const subscribeToNothing = () => () => {};
+
+function getClientMonthLabel() {
+  if (typeof window === 'undefined') return 'Monthly • Resets monthly';
+  if (!cachedMonthLabel) {
+    const d = new Date();
+    const monthName = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    cachedMonthLabel = `${monthName} • Resets monthly`;
+  }
+  return cachedMonthLabel;
+}
+
+function getServerMonthLabel() {
+  return 'Monthly • Resets monthly';
+}
+
 export default function DashboardPage() {
   // Connection & refresh state
   const [connectionStatus, setConnectionStatus] = useState('checking'); // 'checking' | 'connected' | 'disconnected' | 'error'
@@ -263,12 +281,12 @@ export default function DashboardPage() {
   // Derived telemetry metrics
   const telemetry = useMemo(() => parseTelemetry(liveData), [liveData]);
 
-  // Current calendar month label (e.g., "November 2026")
-  const currentMonthLabel = useMemo(() => {
-    const d = new Date();
-    const monthName = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    return `${monthName} • Resets monthly`;
-  }, []);
+  // Current calendar month label (client-synced to prevent frozen date during Next.js prerender)
+  const currentMonthLabel = useSyncExternalStore(
+    subscribeToNothing,
+    getClientMonthLabel,
+    getServerMonthLabel
+  );
 
   // Display value for Current Month Generation (calculated sum of days or direct telemetry)
   const displayMonthEnergy = useMemo(() => {
