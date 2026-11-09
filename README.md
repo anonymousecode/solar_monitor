@@ -40,21 +40,7 @@ A personal solar monitoring web application that connects directly to the offici
 
 Configure your credentials in `.env.local` (kept out of version control via `.gitignore`):
 
-```env
-# Deye OpenAPI App ID and Secret (from https://developer.deyecloud.com/)
-DEYE_APP_ID=your_app_id
-DEYE_APP_SECRET=your_app_secret
-
-# Deye Cloud Account Credentials
-DEYE_EMAIL=your_email@example.com
-DEYE_PASSWORD=your_plain_password
-
-# Regional Base URL
-# For India: https://india-developer.deyecloud.com
-# For Europe / Global: https://eu1-developer.deyecloud.com
-# For Americas: https://us1-developer.deyecloud.com
-DEYE_BASE_URL=https://india-developer.deyecloud.com
-```
+# Regional Base URL (e.g., provided in your Deye developer account)
 
 > **Note on Password Encryption**: The application automatically handles the standard SHA-256 lowercase hexadecimal password encryption required by the Deye Cloud OpenAPI. You supply your account password in `.env.local`, and `lib/deye.js` securely hashes it server-side.
 
@@ -107,12 +93,7 @@ All routes are implemented as Next.js App Router Route Handlers in `app/api/deye
 4. Netlify automatically detects Next.js via the root `netlify.toml`:
    - **Build command**: `npm run build`
    - **Publish directory**: `.next`
-5. Under **Site configuration** $\to$ **Environment variables**, add:
-   - `DEYE_APP_ID`
-   - `DEYE_APP_SECRET`
-   - `DEYE_EMAIL`
-   - `DEYE_PASSWORD`
-   - `DEYE_BASE_URL`
+5. Under **Site configuration** $\to$ **Environment variables**, add
 6. Click **Deploy**. Netlify's Next.js runtime adapter provisions the Route Handlers and server components with zero additional configuration.
 
 ---

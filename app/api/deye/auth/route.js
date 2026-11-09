@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthInfo } from '../../../../lib/deye';
 
-export async function GET() {
+export async function GET(request) {
   try {
     const auth = await getAuthInfo();
     return NextResponse.json({

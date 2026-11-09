@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAccessToken, getStations } from '../../../../lib/deye';
 
-export async function GET() {
+export async function GET(request) {
   try {
     await getAccessToken();
     const result = await getStations(1, 50);
