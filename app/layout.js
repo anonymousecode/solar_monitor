@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'Deye Solar Monitor',
+  title: 'Solar Monitor',
   description: 'Real-time solar monitoring dashboard',
 };
 

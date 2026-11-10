@@ -263,7 +263,6 @@ export default function DashboardPage() {
   const [devices, setDevices] = useState([]);
   const [selectedDeviceSn, setSelectedDeviceSn] = useState(null);
   const [liveData, setLiveData] = useState(null);
-  const [measurePoints, setMeasurePoints] = useState([]);
   const [historyData, setHistoryData] = useState([]);
 
   // Loading states
@@ -438,18 +437,6 @@ export default function DashboardPage() {
           setLoadingLive(false);
         }
 
-        // Fetch measure points discovery
-        const mpRes = await fetch(`/api/deye/measure-points?deviceSn=${encodeURIComponent(selectedDeviceSn)}`);
-        const mpJson = await mpRes.json();
-        if (active && mpRes.ok && mpJson.success) {
-          const points = Array.isArray(mpJson.data)
-            ? mpJson.data
-            : Array.isArray(mpJson.data?.measurePoints)
-            ? mpJson.data.measurePoints
-            : [];
-          setMeasurePoints(points);
-        }
-
         // Fetch history data
         const todayStr = new Date().toISOString().split('T')[0];
         const effectiveStart = startDate || todayStr;
@@ -473,39 +460,94 @@ export default function DashboardPage() {
               items = raw.dataList;
             }
 
-            const formatted = items.map((point, idx) => {
-              let val = 0;
-              if (Array.isArray(point.itemList)) {
-                // Find active power or production metric in item list
-                const powerItem = point.itemList.find((it) =>
-                  [
-                    'totalactiveacoutputpower',
-                    'production',
-                    'dailyactiveproduction',
-                    'activepower',
-                    'generationpower',
-                  ].includes(it.key?.toLowerCase())
-                ) || point.itemList[0];
-                val = parseFloat(powerItem?.value) || 0;
-              } else if (point.value !== undefined) {
-                val = parseFloat(point.value) || 0;
+            if (granCode === 1) {
+              // Group 5-minute frames into true Hourly Production (kWh generated per hour)
+              const hourlyMax = {};
+              let minH = 6;
+              let maxH = 19;
+
+              items.forEach((p) => {
+                let d;
+                if (/^\d{10}$/.test(String(p.time))) {
+                  d = new Date(parseInt(p.time, 10) * 1000);
+                } else {
+                  d = new Date(p.time || p.date);
+                }
+                const hour = d.getHours();
+                if (!isNaN(hour)) {
+                  if (hour < minH && hour >= 4) minH = hour;
+                  if (hour > maxH) maxH = hour;
+                }
+
+                let prod = 0;
+                if (Array.isArray(p.itemList)) {
+                  const it = p.itemList.find((item) =>
+                    ['dailyactiveproduction', 'production', 'dailyproduction'].includes(
+                      item.key?.toLowerCase()
+                    )
+                  );
+                  prod = parseFloat(it?.value) || 0;
+                } else if (p.value !== undefined) {
+                  prod = parseFloat(p.value) || 0;
+                }
+
+                if (hourlyMax[hour] === undefined || prod > hourlyMax[hour]) {
+                  hourlyMax[hour] = prod;
+                }
+              });
+
+              const hourlyResult = [];
+              let prevVal = 0;
+
+              for (let h = minH; h <= maxH; h++) {
+                const curVal = hourlyMax[h] !== undefined ? hourlyMax[h] : prevVal;
+                const delta = Math.max(0, curVal - prevVal);
+                if (curVal > prevVal) {
+                  prevVal = curVal;
+                }
+
+                hourlyResult.push({
+                  time: `${String(h).padStart(2, '0')}:00`,
+                  value: Math.round(delta * 100) / 100,
+                  cumulative: Math.round(curVal * 100) / 100,
+                  unit: 'kWh',
+                });
               }
 
-              // Format time label for chart axis
-              let timeLabel = point.time || point.date || `${idx}:00`;
-              if (/^\d{10}$/.test(String(timeLabel))) {
-                const d = new Date(parseInt(timeLabel, 10) * 1000);
-                timeLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(timeLabel))) {
-                timeLabel = timeLabel.slice(5); // e.g. "11-09"
-              }
+              setHistoryData(hourlyResult);
+            } else {
+              const formatted = items.map((point, idx) => {
+                let val = 0;
+                if (Array.isArray(point.itemList)) {
+                  const prodItem =
+                    point.itemList.find((it) =>
+                      ['production', 'dailyactiveproduction', 'dailyproduction', 'energy'].includes(
+                        it.key?.toLowerCase()
+                      )
+                    ) || point.itemList[0];
+                  val = parseFloat(prodItem?.value) || 0;
+                } else if (point.value !== undefined) {
+                  val = parseFloat(point.value) || 0;
+                }
 
-              return {
-                time: timeLabel,
-                value: Math.round(val * 100) / 100,
-              };
-            });
-            setHistoryData(formatted);
+                let timeLabel = point.time || point.date || `${idx}`;
+                if (/^\d{10}$/.test(String(timeLabel))) {
+                  const d = new Date(parseInt(timeLabel, 10) * 1000);
+                  timeLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(timeLabel))) {
+                  timeLabel = timeLabel.slice(5); // e.g. "11-09"
+                }
+
+                return {
+                  time: timeLabel,
+                  value: Math.round(val * 100) / 100,
+                  cumulative: Math.round(val * 100) / 100,
+                  unit: 'kWh',
+                };
+              });
+
+              setHistoryData(formatted);
+            }
           } else {
             setHistoryData([]);
           }
@@ -936,58 +978,33 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             <SolarChart
               data={historyData}
-              title={`Production Output (${granularity.toUpperCase()})`}
-              dataKey="value"
-              xAxisKey="time"
-              loading={loadingHistory}
-              chartType="area"
-            />
-
-            <SolarChart
-              data={historyData}
-              title={`Energy Yield Breakdown (${granularity.toUpperCase()})`}
+              title={
+                granularity === 'hourly'
+                  ? 'Hourly Solar Production'
+                  : `${granularity.charAt(0).toUpperCase() + granularity.slice(1)} Generation`
+              }
               dataKey="value"
               xAxisKey="time"
               loading={loadingHistory}
               chartType="bar"
+              unit="kWh"
+            />
+
+            <SolarChart
+              data={historyData}
+              title={
+                granularity === 'hourly'
+                  ? 'Cumulative Daily Generation'
+                  : `${granularity.charAt(0).toUpperCase() + granularity.slice(1)} Yield Trend`
+              }
+              dataKey={granularity === 'hourly' ? 'cumulative' : 'value'}
+              xAxisKey="time"
+              loading={loadingHistory}
+              chartType="area"
+              unit="kWh"
             />
           </div>
         </section>
-
-        {/* Section 4: Measure Points Discovery */}
-        {measurePoints.length > 0 && (
-          <section aria-label="Hardware Measure Points" className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 sm:p-6 shadow-sm dark:shadow-lg transition-colors duration-200">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300">
-                  Supported Measure Points
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Active telemetry keys discovered for inverter {selectedDeviceSn}
-                </p>
-              </div>
-              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400 font-mono">
-                {measurePoints.length} points
-              </span>
-            </div>
-
-            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2">
-              {measurePoints.map((mp, idx) => {
-                const pointName = typeof mp === 'string' ? mp : mp.name || mp.key || mp.dataKey;
-                const pointKey = typeof mp === 'string' ? mp : mp.key || mp.dataKey;
-                return (
-                  <span
-                    key={pointKey || idx}
-                    className="rounded-md border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/80 px-2 py-1 text-[11px] font-mono text-slate-700 dark:text-slate-300"
-                    title={pointName}
-                  >
-                    {pointName}
-                  </span>
-                );
-              })}
-            </div>
-          </section>
-        )}
       </main>
 
       {/* Footer */}

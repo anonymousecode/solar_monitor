@@ -14,17 +14,20 @@ import {
 import Skeleton from '../ui/Skeleton';
 import { useTheme } from '../ui/ThemeContext';
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, unit = 'kWh' }) {
   if (!active || !payload || !payload.length) return null;
 
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/95 px-3 py-2 shadow-xl backdrop-blur-sm">
       <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
-      {payload.map((entry, index) => (
-        <p key={index} className="text-xs sm:text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
-          {entry.value?.toLocaleString()} {entry.unit || 'W'}
-        </p>
-      ))}
+      {payload.map((entry, index) => {
+        const itemUnit = entry.payload?.unit || entry.unit || unit;
+        return (
+          <p key={index} className="text-xs sm:text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            {entry.value !== null && entry.value !== undefined ? entry.value.toLocaleString() : '--'} {itemUnit}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -36,6 +39,7 @@ export default function SolarChart({
   xAxisKey = 'time',
   loading,
   chartType = 'area',
+  unit = 'kWh',
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -58,7 +62,14 @@ export default function SolarChart({
     <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4 sm:p-5 shadow-sm dark:shadow-md flex flex-col transition-colors duration-200">
       {title && (
         <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-200">{title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-200">{title}</h3>
+            {unit && (
+              <span className="text-[10px] font-medium font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-1.5 py-0.5 rounded">
+                {unit}
+              </span>
+            )}
+          </div>
           {hasData && (
             <span className="text-[10px] text-slate-500 font-mono">
               {data.length} records
@@ -91,7 +102,7 @@ export default function SolarChart({
                   tickLine={false}
                   axisLine={{ stroke: axisStroke }}
                 />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)' }} />
+                <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)' }} />
                 <Bar
                   dataKey={dataKey}
                   fill="#10b981"
@@ -119,7 +130,7 @@ export default function SolarChart({
                   tickLine={false}
                   axisLine={{ stroke: axisStroke }}
                 />
-                <Tooltip content={<CustomTooltip />} cursor={{ stroke: axisStroke, strokeDasharray: '3 3' }} />
+                <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ stroke: axisStroke, strokeDasharray: '3 3' }} />
                 <Area
                   type="monotone"
                   dataKey={dataKey}
